@@ -1,0 +1,11 @@
+[project]
+name = "paper-retriever-workflow-uv"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastmcp>=2.2.3",
+    "torch>=2.7.0",
+    "torchvision>=0.22.0",
+]

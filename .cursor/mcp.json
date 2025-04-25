@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "arxiv-mcp-server": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "datasets",
+        "--with",
+        "fastmcp",
+        "--with",
+        "pydantic",
+        "--with",
+        "torch",
+        "--with",
+        "transformers",
+        "--with",
+        "typing",
+        "fastmcp",
+        "run",
+        "/Users/mustafashaikh/paper-retriever-workflow-uv/mcp/arxiv_mcp_server.py"
+      ]
+    }
+  }
+}
