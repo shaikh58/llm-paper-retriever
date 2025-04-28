@@ -1,1 +1,0 @@
-{"input": "Search for papers about astrophysics mentioning 'gravitational waves' with no more than 100 citations after 2018.", "output": "## QUERY PARAMETERS\n\n- **Topic**: astrophysics\n\n## CONSTRAINTS\n\n- **Citations**: <= 100\n- **Keyword**: gravitational waves\n- **Year**: > 2018\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"}
