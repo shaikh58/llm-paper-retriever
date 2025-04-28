@@ -10,3 +10,13 @@ wheels/
 .venv
 *.ipynb
 mcp/.DS_Store
+.DS_Store
+test/test.jsonl
+train/train.jsonl
+train/train_data_generation_log.txt
+test/test_data_generation_log.txt
+misc/rouge-eval-meta-llama.csv
+misc/rouge-eval-lora-0-50k-train-grad-accum.csv
+misc/rouge-eval-lora-0-4.5k-train.csv
+misc/rouge-eval-lora-0-10k-train-grad-accum.csv
+misc/rouge-eval-lora-0-100-train.csv

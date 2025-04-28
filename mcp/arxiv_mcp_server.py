@@ -6,9 +6,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM#, BitsAndBytesConfi
 import re
 from typing import Optional, Literal
 from pydantic import BaseModel
-
-# TODO: specify dependencies
-mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "datasets", "pydantic", "torch", "typing", "json"])
+import arxiv
+from datetime import datetime
+mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "datasets", "pydantic", "torch", "typing", "json", "arxiv"])
 
 # model = AutoModelForCausalLM.from_pretrained(
 #     "meta-llama/Meta-Llama-3-8B-Instruct",
@@ -23,37 +23,39 @@ tokenizer.pad_token = tokenizer.eos_token
 # Define the valid operators as string literals
 ComparisonOperatorType = Literal[">", "<", ">=", "<=", "="]
 
-class CitationCriteria(BaseModel):
+class FilterCriteria(BaseModel):
     operator: ComparisonOperatorType
     value: int
     
     @classmethod
-    def parse_citation_string(cls, citation_str: str) -> "CitationCriteria":
+    def parse_filter_string(cls, filter_str: str) -> "FilterCriteria":
         # Remove any whitespace
-        citation_str = citation_str.replace(" ", "")
+        filter_str = filter_str.replace(" ", "")
         
         # Match patterns like >=50, >100, =75, etc.
         pattern = r'([><=]=?|<)(\d+)'
-        match = re.match(pattern, citation_str)
+        match = re.match(pattern, filter_str)
         
         if match:
             operator_str, value_str = match.groups()
             # The operator_str is already in the correct format
             return cls(operator=operator_str, value=int(value_str))
-        raise ValueError(f"Invalid citation criteria format: {citation_str}")
+        raise ValueError(f"Invalid filter criteria format: {filter_str}")
 
 class Query(BaseModel):
     topic: Optional[str] = None
     journal: Optional[str] = None
     author: Optional[str] = None
-    citations: Optional[CitationCriteria] = None
+    year: Optional[FilterCriteria] = None
+    citations: Optional[FilterCriteria] = None
     keyword: Optional[str] = None
     limit: Optional[int] = 10
-    sort_by: Optional[Literal["date", "citations", "relevance"]] = "relevance"
+    # relevance not used for now
+    sort_by: Optional[Literal["year", "citations", "relevance"]] = "year"
     sort_order: Optional[Literal["ascending", "descending"]] = "descending"
 
 
-def markdown_to_json(markdown_text: str) -> str:
+def markdown_to_json(markdown_text: str) -> Query:
     """Converts markdown from model output to json for arxiv query"""
     # Initialize an empty dictionary to store our parameters
     params = {}
@@ -85,10 +87,12 @@ def markdown_to_json(markdown_text: str) -> str:
                 params["topic"] = value
             elif param_name == "author":
                 params["author"] = value
+            elif param_name == "year":
+                params["year"] = FilterCriteria.parse_filter_string(value)
             elif param_name == "journal":
                 params["journal"] = value
             elif param_name == "citations":
-                params["citations"] = CitationCriteria.parse_citation_string(value)
+                params["citations"] = FilterCriteria.parse_filter_string(value)
             elif param_name == "keyword":
                 params["keyword"] = value
             elif param_name == "limit":
@@ -98,21 +102,81 @@ def markdown_to_json(markdown_text: str) -> str:
             elif param_name == "sort order":
                 params["sort_order"] = value.lower()
     
-    return Query(**params).model_dump_json()
+    return Query(**params)
+
+def to_arxiv_format(query: str) -> str:
+    """Converts json query to arxiv query format"""
+    arxiv_query = ""
+    attr_dict = query.dict()
+    for param_name, value in attr_dict.items():
+        if value is None:
+            continue
+        # can't use journal or topic because arxiv coding is difficult to map to; journal ref is not standardized
+        # if param_name == "topic":
+        #     arxiv_query += f"cat:%22{value}%22 AND "
+        elif param_name == "author":
+            arxiv_query += f"au:%22{value}%22 AND "
+        # elif param_name == "journal":
+        #     arxiv_query += f"jr:%22{value}%22 AND "
+        # can't use citations because arxiv doesn't support it
+        # elif param_name == "citations":
+        #     ...
+        elif param_name == "keyword":
+            arxiv_query += f"ti:%22{value}%22 AND "
+        elif param_name == "year":
+            date_now = datetime.now().strftime("%Y%m%d%H%M")
+            date_earliest = "199101010000" # 1991 is the earliest year for arxiv
+            operator = query.year.operator
+            value = query.year.value
+            if operator == ">" or operator == ">=":
+                arxiv_query += f"submittedDate:[{value}01010000 TO {date_now}] AND "
+            elif operator == "<" or operator == "<=":
+                arxiv_query += f"submittedDate:[{date_earliest} TO {value}01010000] AND "
+            elif operator == "=":
+                arxiv_query += f"submittedDate:[{value}01010000 TO {value}12312359] AND "
+                
+    # remove the last AND
+    arxiv_query = arxiv_query[:-5]
+
+    return arxiv_query
 
 def request_arxiv(query: str) -> str:
     """Requests arxiv papers"""
-    return query
+    client = arxiv.Client()
+    search = arxiv.Search(
+        query = query,
+        max_results = 10,
+        sort_by = arxiv.SortCriterion.SubmittedDate
+    )
+    results = client.results(search)
+    all_results = list(results)
 
-def parse_arxiv_response(response: str) -> str:
-    """Parses arxiv response"""
-    return response
+    return all_results
 
-def load_data(data_path: str, instruction_path: str) -> dict:
+def arxiv_to_chat(arxiv_response: list[arxiv.Result]) -> str:
+    """Converts arxiv response to chat format"""
+    output = "Here are the papers I found: \n\n "
 
-    with open(instruction_path, "r") as f:
-        instruction = f.read()
+    for result in arxiv_response:
+        for link in result.links:
+            if link.title == "pdf":
+                url = link.href
+        list_authors = []
+        for author in result.authors:
+            list_authors.append(author.name)
+        pub_date = result.published.strftime("%Y-%m-%d")
+        update_date = result.updated.strftime("%Y-%m-%d")
 
+        output += f"{result.title}\n"
+        output += f"Authors: {', '.join(list_authors)}\n"
+        # output += f"{result.summary}\n"
+        output += f"URL: {url}\n"
+        output += f"Published: {pub_date}\n"
+        output += f"Updated: {update_date}\n"
+
+    return output
+
+def load_data(data_path: str, instruction: str) -> dict:
     # Read the JSONL file 
     with open(data_path, 'r') as file:
         data_list = [json.loads(line) for line in file]
@@ -130,10 +194,8 @@ def load_data(data_path: str, instruction_path: str) -> dict:
     
     return data
 
-def prepare_query(query: str, instruction_path: str) -> dict:
+def prepare_query(query: str, instruction: str) -> dict:
     """Convert string query into a JSON format for input to preprocessing pipeline"""
-    with open(instruction_path, "r") as f:
-        instruction = f.read()
     data = {'instruction': [instruction], 'input': [query]}
 
     return data
@@ -186,37 +248,72 @@ def run_model_inference(model, tokenizer, tokenized_query: str) -> str:
 
     return generated_texts
 
+
+@mcp.prompt()
+def arxiv_search_prompt():
+    return "Do not modify the user query. Just pass it straight to 'run_arxiv_search_pipeline'."
+
 @mcp.tool()
-def run_arxiv_search_pipeline(query: str) -> str:
-    """Runs the arxiv search pipeline"""
-    instruction_path = "../instruction.txt"
+def run_arxiv_search_pipeline(user_query: str = None) -> str:
+    """Runs the arxiv search pipeline. Do not modify the user query."""
+
+    instruction = """You are a specialized AI designed to parse research paper queries into a structured format. Always respond with a consistent markdown structure as shown below:
+
+    ## QUERY PARAMETERS
+
+    - **Topic**: [main research topic]
+
+    ## CONSTRAINTS
+
+    - **Year**: [operator] [value]
+    - **Citations**: [operator] [value]
+    - **Author**: [author names]
+    - **Journal/Conference**: [publication venues]
+
+    ## OPTIONS
+
+    - **Limit**: [number of results]
+    - **Sort By**: [date, citations]
+    - **Sort Order**: [ascending, descending]
+
+    Only include sections and parameters that are relevant to the query.
+    Use operators like >, <, =, >=, <=, between, where appropriate.
+    Do not provide explanations before or after the structured format.
+    """
 
     ############### temporary override: load the query in from a file
-    data_path = "../single_query.jsonl"
-    query = load_data(data_path, instruction_path)
-    model_output = query["output"][0]
+    data_path = "single_query.jsonl"
+    # can only use local files with a filesystem MCP server active in Cursor
+    # for full prod deployment, we would use the finetuned model so there would be no local files in use
+    # query = load_data(data_path, instruction)
+    # model_output = query["output"][0]
+    model_output = "## QUERY PARAMETERS\n\n- **Topic**: astrophysics\n\n## CONSTRAINTS\n\n- **Citations**: <= 100\n- **Keyword**: gravitational waves\n- **Year**: > 2018\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"
     ###############
-
+    print("here i am")
     ############### run model inference - switched off until model deployment is figured out
-    # json_query = prepare_query(query, instruction_path)
+    # json_query = prepare_query(user_query, instruction)
     # tokenized_query = tokenize_query(json_query)
     # model_output = run_model_inference(model, tokenizer, tokenized_query)
     ###############
 
     ############### parse the model output
-    arxiv_query = markdown_to_json(model_output)
+    query : Query = markdown_to_json(model_output)
     ###############
+
+    ############### map to arxiv query format
+    arxiv_query = to_arxiv_format(query)
 
     ############### request from arxiv
     arxiv_response = request_arxiv(arxiv_query)
     ###############
 
-    ############### parse the arxiv response
-    arxiv_response_parsed = parse_arxiv_response(arxiv_response)
+    ############### create a return message for the user
+    output = arxiv_to_chat(arxiv_response)
     ###############
 
-    return arxiv_response_parsed
+    return output
 
 
 if __name__ == "__main__":
+    # run_arxiv_search_pipeline()
     mcp.run()

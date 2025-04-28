@@ -16,9 +16,11 @@
         "transformers",
         "--with",
         "typing",
+        "--with",
+        "arxiv",
         "fastmcp",
         "run",
-        "/Users/mustafashaikh/paper-retriever-workflow-uv/mcp/arxiv_mcp_server.py"
+        "/path/to/paper-retriever-workflow-uv/mcp/arxiv_mcp_server.py"
       ]
     }
   }

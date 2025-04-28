@@ -1,0 +1,1 @@
+Do not modify the user query when using the arxiv search pipeline tool. Pass the entire chat query, do not modify it or truncate it.
