@@ -8,6 +8,8 @@ from typing import Optional, Literal
 from pydantic import BaseModel
 import arxiv
 from datetime import datetime
+from requests import get
+
 mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "datasets", "pydantic", "torch", "typing", "json", "arxiv"])
 
 # model = AutoModelForCausalLM.from_pretrained(
@@ -51,7 +53,7 @@ class Query(BaseModel):
     keyword: Optional[str] = None
     limit: Optional[int] = 10
     # relevance not used for now
-    sort_by: Optional[Literal["year", "citations", "relevance"]] = "year"
+    sort_by: Optional[Literal["year", "citations", "relevance"]] = "citations"
     sort_order: Optional[Literal["ascending", "descending"]] = "descending"
 
 
@@ -104,7 +106,7 @@ def markdown_to_json(markdown_text: str) -> Query:
     
     return Query(**params)
 
-def to_arxiv_format(query: str) -> str:
+def to_arxiv_format(query: Query) -> str:
     """Converts json query to arxiv query format"""
     arxiv_query = ""
     attr_dict = query.dict()
@@ -140,22 +142,53 @@ def to_arxiv_format(query: str) -> str:
 
     return arxiv_query
 
-def request_arxiv(query: str) -> str:
+def request_arxiv(arxiv_query: str, user_query: Query) -> str:
     """Requests arxiv papers"""
     client = arxiv.Client()
     search = arxiv.Search(
-        query = query,
-        max_results = 10,
-        sort_by = arxiv.SortCriterion.SubmittedDate
+        query = arxiv_query,
+        max_results = 200,
+        sort_by = arxiv.SortCriterion.Relevance
     )
     results = client.results(search)
     all_results = list(results)
+    if user_query.citations is None:
+        return all_results
+    
+    citation_num = user_query.citations.value
+    operator = user_query.citations.operator
 
-    return all_results
+    map_result_citations = {}
+    filtered_results = []
+    # get citation count from opencitations
+    for result in all_results:
+        # if no doi, discard it from the list
+        if result.doi is None:
+            continue
+        API_CALL = f"https://opencitations.net/index/api/v2/citation-count/doi:{result.doi}"
+        response = get(API_CALL)
+        if response.status_code == 200:
+            citation_count = int(response.json()[0]["count"])
+            map_result_citations[result.doi] = citation_count
+            if operator == ">" or operator == ">=":
+                if citation_count > citation_num:
+                    filtered_results.append(result)
+            else:
+                filtered_results.append(result)
+        else:
+            ...
+    # sort the results by citations
+    # check that map_result_citations is not empty
+    if map_result_citations:
+        filtered_results.sort(key=lambda x: map_result_citations[x.doi], reverse=True)
+    else:
+        ...
+
+    return filtered_results[:user_query.limit]
 
 def arxiv_to_chat(arxiv_response: list[arxiv.Result]) -> str:
     """Converts arxiv response to chat format"""
-    output = "Here are the papers I found: \n\n "
+    output = "Here are the papers I found that match your query. If you specified a citation limit, the results are filtered and sorted by citations: \n\n "
 
     for result in arxiv_response:
         for link in result.links:
@@ -249,10 +282,6 @@ def run_model_inference(model, tokenizer, tokenized_query: str) -> str:
     return generated_texts
 
 
-@mcp.prompt()
-def arxiv_search_prompt():
-    return "Do not modify the user query. Just pass it straight to 'run_arxiv_search_pipeline'."
-
 @mcp.tool()
 def run_arxiv_search_pipeline(user_query: str = None) -> str:
     """Runs the arxiv search pipeline. Do not modify the user query."""
@@ -281,16 +310,11 @@ def run_arxiv_search_pipeline(user_query: str = None) -> str:
     Do not provide explanations before or after the structured format.
     """
 
-    ############### temporary override: load the query in from a file
-    data_path = "single_query.jsonl"
-    # can only use local files with a filesystem MCP server active in Cursor
-    # for full prod deployment, we would use the finetuned model so there would be no local files in use
-    # query = load_data(data_path, instruction)
-    # model_output = query["output"][0]
-    model_output = "## QUERY PARAMETERS\n\n- **Topic**: astrophysics\n\n## CONSTRAINTS\n\n- **Citations**: <= 100\n- **Keyword**: gravitational waves\n- **Year**: > 2018\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"
+    ############### temporary override: simulate model output for demo
+    model_output = "## QUERY PARAMETERS\n\n- **Topic**: machine learning\n\n## CONSTRAINTS\n\n- **Citations**: >= 10\n- **Keyword**: transformers\n- **Year**: > 2023\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"
     ###############
-    print("here i am")
-    ############### run model inference - switched off until model deployment is figured out
+
+    ############### run model inference
     # json_query = prepare_query(user_query, instruction)
     # tokenized_query = tokenize_query(json_query)
     # model_output = run_model_inference(model, tokenizer, tokenized_query)
@@ -304,7 +328,7 @@ def run_arxiv_search_pipeline(user_query: str = None) -> str:
     arxiv_query = to_arxiv_format(query)
 
     ############### request from arxiv
-    arxiv_response = request_arxiv(arxiv_query)
+    arxiv_response = request_arxiv(arxiv_query, query)
     ###############
 
     ############### create a return message for the user
@@ -315,5 +339,4 @@ def run_arxiv_search_pipeline(user_query: str = None) -> str:
 
 
 if __name__ == "__main__":
-    # run_arxiv_search_pipeline()
     mcp.run()

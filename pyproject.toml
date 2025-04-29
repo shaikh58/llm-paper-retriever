@@ -1,10 +1,11 @@
 [project]
-name = "paper-retriever-workflow-uv"
+name = "llm-paper-retriever"
 version = "0.1.0"
-description = "Add your description here"
+description = "LLM-based research paper retrieval workflow"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "datasets>=3.5.1",
     "fastmcp>=2.2.3",
     "torch>=2.7.0",
     "torchvision>=0.22.0",
