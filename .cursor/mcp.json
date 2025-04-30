@@ -20,7 +20,7 @@
         "arxiv",
         "fastmcp",
         "run",
-        "/Users/mustafashaikh/llm-paper-retriever/mcp/arxiv_mcp_server.py"
+        "/path/to/llm-paper-retriever/mcp/arxiv_mcp_server.py"
       ]
     }
   }

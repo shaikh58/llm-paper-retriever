@@ -11,90 +11,62 @@ A lightweight tool that retrieves relevant research papers from Arxiv based on u
 
 ## Key Features
 
-- ✅ **Open-Source**: Fine-tuned the small Meta Llama 3 8B Instruct model requiring only 40GB of GPU memory, rather than relying on proprietary APIs. Fine tuned model available on 🤗.
-- ✅ **Cursor Integration**: Seamless workflow through MCP server integration
-- ✅ **Custom Search**: Supports various search constraints and filtering options
-
-## Architecture
-
-![Architecture Diagram](architecture_diagram.png)
-
-*The system architecture showing the flow from user input in Cursor IDE through the MCP server to the fine-tuned Llama 3 model, which generates structured markdown that gets parsed to JSON for querying the arXiv API.*
+- ✅ **Lightweight**: Fine-tuned Meta Llama 3.2 1B Instruct model, which can be loaded unquantized on a 16GB Macbook Air.
+- ✅ **Open Source**: Model available on 🤗. Simply use the model id "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query". Full model card available on [Hugging Face](https://huggingface.co/Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query).  Papers retrieved from open source Arxiv API.
+- ✅ **Cursor Integration**: Seamless workflow through MCP server integration. No need to leave the IDE or load the model yourself.
+- ✅ **Custom Search**: Supports various search constraints and filtering options such as citation count and publication date
 
 
-## LLM Fine-tuning
-
-In this project, I demonstrate a simple example of how to fine-tune an open-source LLM for specialized tasks. I choose a model small enough to fit on e.g. RTX6000 or a single A40 GPU.
-
-- **Base model**: Meta Llama 3 8B Instruct
-- **Structured Output**: The model is trained to output structured markdown instead of conversational text. This makes it possible to parse the output and construct a query to a search engine.
-- **Generate training Data with added variance**: Synthetically generated dataset designed to teach the model to output structured markdown. Added variance to the training data by passing generated user queries to an LLM to make the user queries more conversational and realistic
-- **LoRA fine tuning**: Fine-tuning process uses LoRA (Low-Rank Adaptation) to efficiently adapt the base model for our specific structured output task while maintaining its general knowledge capabilities.
-
-
-## MCP Server Integration with Cursor IDE
-
-I setup a basic MCP server to allow the model to be used as a tool within the Cursor environment
-
-- Enables seamless workflow from query to results without leaving the IDE
-
-
-## Results
-
-### Training Metrics
-
-![Training and Validation Loss Curves](training_loss_curve.png)
-
-*Caption: Training and validation loss over 10 epochs showing convergence with minimal overfitting.*
-
-### Dataset Examples
-
-| User Query | Generated Structured Markdown |
-|------------|------------------------------|
-| "Find recent papers on transformer architectures in NLP published in the last 2 years" | ```json\n{"topic": "transformer architectures", "field": "NLP", "date_range": "2022-2024", "sort_by": "relevance"}\n``` |
-| "Show me the most cited papers on protein folding from the top journals" | ```json\n{"topic": "protein folding", "sort_by": "citation_count", "journal_quality": "top", "limit": 10}\n``` |
-
-### Fine-tuning Results
-
-| Dataset Size | ROUGE-L | Exact Match 
-|--------------|---------|-------------|
-| 100  | 0.78    | 0.45        | 0.82              
-| 500  | 0.85    | 0.62        | 0.91            
-| 1000  | 0.89   | 0.70        | 0.95           
-
-
-## Installation
+## User Guide
 Clone the repository: 
 ```
-git clone https://github.com/shaikh58/paper-retriever-workflow.git
-cd paper-retriever-workflow
+git clone https://github.com/shaikh58/llm-paper-retriever.git
+cd llm-paper-retriever
+```
+This project uses uv to manage dependencies. Install uv:
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 Install dependencies: 
 ```
-pip install -r requirements.txt
+uv sync
 ```
-Download the fine-tuned model: 
+Add cursor mcp json file and cursor rules file to your project. Update the path in the mcp.json file with the path to this repository on your local machine. 
 ```
-model = AutoModelForCausalLM.from_pretrained("shaikh58/llama-3-8b-instruct-arxiv-search")
+mkdir -p /your/cursor/project/.cursor
+cp .cursor/mcp.json /your/cursor/project/.cursor/mcp.json
+cp .cursorrules /your/cursor/project/.cursorrules
 ```
-Start the server: 
-```
-python launch_mcp_server.py
-```
-## Usage
 
-1. Install the companion extension in Cursor IDE
-2. Connect to your local MCP server
-3. Use the command palette to access the Research Paper Assistant
-4. Enter your query with any constraints
-5. Review and explore the returned papers
+Check whether Cursor recognizes the server: From the Menu bar, go to 'Cursor' -> 'Settings' -> Cursor Settings -> MCP.\
+If everything works, you should see the server in the list. You may need to refresh the list.
+
+### Its ready to try out!
+
+#### Note: This tool loads in a fine tuned 1B parameter model from the Hugging Face hub. It is small enough to fit unquantized on a 16GB M3 Macbook Air, and may even work with as low as 8GB of GPU memory (unified memory if you're a Mac user). 
+
+Tools in Cursor only work in Agent mode. Switch to Agent mode in your chat window, and ask it to find you research papers! It should connect to this tool and ask 
+for your permission to run it. Wait a few seconds and it should return a list of papers.
+
+For best results, only enter your query in the chat window. Do not include any other text. e.g. "Find me papers on transformer architectures published in since 2023 with at least 100 citations".
+
+
+## Deep dive: LLM Fine-tuning
+
+- **Base model**: Meta Llama 3.2 1B Instruct
+- **Structured Output**: The model is trained to output structured markdown instead of conversational text. This makes it possible to parse the output and construct a query for a search API.
+- **Generate realistic training data**: Synthetically generated dataset designed to teach the model to output structured markdown. Added variance to the training data by passing generated user queries through an LLM to make the user queries more conversational and realistic.
+- **Dataset size**: 10,000 synthetically generated queries enough to achieve satisfactory performance.
+- **LoRA fine tuning**: Fine-tuning process uses LoRA (Low-Rank Adaptation) to efficiently adapt the base model for our specific structured output task while maintaining its general knowledge capabilities.
+
+
+### Dataset Sample
+
+| User Query | Final JSON output (after parsing) |
+|------------|------------------------------|
+| "Find recent papers on transformer architectures in NLP published in the last 2 years with at least 100 citations" | ```{"keyword": "transformers", "year": (2023, ">="), "sort_by": "year", "limit": 10}``` | 
+
 
 ## License
 
 This project is released under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Meta for releasing Llama 3 as an open-source model
-- The Cursor IDE team for their MCP protocol
-- arXiv for their open API

@@ -12,14 +12,13 @@ from requests import get
 
 mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "datasets", "pydantic", "torch", "typing", "json", "arxiv"])
 
-# model = AutoModelForCausalLM.from_pretrained(
-#     "meta-llama/Meta-Llama-3-8B-Instruct",
-#     # quantization_config=BitsAndBytesConfig(load_in_8bit=True),
-#     device_map="auto",
-#     local_files_only=True
-#  )
+model = AutoModelForCausalLM.from_pretrained(
+    "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query",
+    device_map="auto",
+    local_files_only=True
+ )
 
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B-Instruct",trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained("Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query",trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
 
 # Define the valid operators as string literals
@@ -252,9 +251,9 @@ def tokenize_and_truncate(examples, max_context_window, max_seq_len):
     return tokenized
 
 
-def tokenize_query(query: str) -> str:
-    max_seq_len = 350 # llama3-8b-instruct official context window
-    max_context_window = 8000
+def preprocess_query(query: str) -> str:
+    max_seq_len = 350 
+    max_context_window = 8000 # llama3.2-1b-instruct official context window
     eval_ds = Dataset.from_dict(query)
     eval_text = eval_ds.map(
     create_inference_text,
@@ -265,7 +264,7 @@ def tokenize_query(query: str) -> str:
         tokenize_and_truncate,
         batched=True, num_proc=1,
         remove_columns=eval_text.column_names,
-        fn_kwargs={"max_context_window": max_context_window, "max_seq_len": max_seq_len, "mode": "eval"}
+        fn_kwargs={"max_context_window": max_context_window, "max_seq_len": max_seq_len}
     )
 
     return eval_tokenized
@@ -310,14 +309,14 @@ def run_arxiv_search_pipeline(user_query: str = None) -> str:
     Do not provide explanations before or after the structured format.
     """
 
-    ############### temporary override: simulate model output for demo
-    model_output = "## QUERY PARAMETERS\n\n- **Topic**: machine learning\n\n## CONSTRAINTS\n\n- **Citations**: >= 10\n- **Keyword**: transformers\n- **Year**: > 2023\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"
+    ############### temporary override: simulate model output for dev purposes
+    # model_output = "## QUERY PARAMETERS\n\n- **Topic**: machine learning\n\n## CONSTRAINTS\n\n- **Citations**: >= 10\n- **Keyword**: transformers\n- **Year**: > 2023\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"
     ###############
 
     ############### run model inference
-    # json_query = prepare_query(user_query, instruction)
-    # tokenized_query = tokenize_query(json_query)
-    # model_output = run_model_inference(model, tokenizer, tokenized_query)
+    json_query = prepare_query(user_query, instruction)
+    tokenized_query = preprocess_query(json_query)
+    model_output = run_model_inference(model, tokenizer, tokenized_query)
     ###############
 
     ############### parse the model output
