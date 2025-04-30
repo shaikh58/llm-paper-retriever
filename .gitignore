@@ -22,3 +22,5 @@ misc/rouge-eval-lora-0-10k-train-grad-accum.csv
 misc/rouge-eval-lora-0-100-train.csv
 scripts/llm_inference.py
 scripts/finetune-llm.py
+misc/finetuning_performance_plot_w_zero_shot.png
+misc/finetuning_performance_plot_zoomed.png
