@@ -3,6 +3,7 @@ import json
 import torch
 from datasets import Dataset
 from transformers import AutoTokenizer, AutoModelForCausalLM#, BitsAndBytesConfig
+from peft import PeftModel
 import re
 from typing import Optional, Literal
 from pydantic import BaseModel
@@ -10,13 +11,18 @@ import arxiv
 from datetime import datetime
 from requests import get
 
-mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "datasets", "pydantic", "torch", "typing", "json", "arxiv"])
+mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "peft", "datasets", "pydantic", "torch", "typing", "json", "arxiv", "accelerate"])
 
-model = AutoModelForCausalLM.from_pretrained(
-    "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query",
-    device_map="auto",
-    local_files_only=True
- )
+base_model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-3.2-1B-Instruct",
+    trust_remote_code=True,
+    # device_map="auto"
+)
+
+model = PeftModel.from_pretrained(
+    base_model,
+    "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query"
+)
 
 tokenizer = AutoTokenizer.from_pretrained("Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query",trust_remote_code=True)
 tokenizer.pad_token = tokenizer.eos_token
@@ -60,13 +66,15 @@ def markdown_to_json(markdown_text: str) -> Query:
     """Converts markdown from model output to json for arxiv query"""
     # Initialize an empty dictionary to store our parameters
     params = {}
+    # extract the "assistant" section of the model output
+    assistant_section = markdown_text.split("<|assistant|>")[1]
     
     # Helper function to extract value from a line
     def extract_value(line: str) -> str:
         return line.split("**: ", 1)[1].strip()
     
     # Split the text into sections
-    sections = markdown_text.split("##")
+    sections = assistant_section.split("##")
     
     for section in sections:
         if not section.strip():
@@ -122,7 +130,7 @@ def to_arxiv_format(query: Query) -> str:
         # can't use citations because arxiv doesn't support it
         # elif param_name == "citations":
         #     ...
-        elif param_name == "keyword":
+        elif param_name == "topic":
             arxiv_query += f"ti:%22{value}%22 AND "
         elif param_name == "year":
             date_now = datetime.now().strftime("%Y%m%d%H%M")
@@ -146,7 +154,7 @@ def request_arxiv(arxiv_query: str, user_query: Query) -> str:
     client = arxiv.Client()
     search = arxiv.Search(
         query = arxiv_query,
-        max_results = 200,
+        max_results = 100,
         sort_by = arxiv.SortCriterion.Relevance
     )
     results = client.results(search)
@@ -185,7 +193,7 @@ def request_arxiv(arxiv_query: str, user_query: Query) -> str:
 
     return filtered_results[:user_query.limit]
 
-def arxiv_to_chat(arxiv_response: list[arxiv.Result]) -> str:
+def arxiv_to_chat(arxiv_response: list[arxiv.Result], arxiv_query: str) -> str:
     """Converts arxiv response to chat format"""
     output = "Here are the papers I found that match your query. If you specified a citation limit, the results are filtered and sorted by citations: \n\n "
 
@@ -205,6 +213,8 @@ def arxiv_to_chat(arxiv_response: list[arxiv.Result]) -> str:
         output += f"URL: {url}\n"
         output += f"Published: {pub_date}\n"
         output += f"Updated: {update_date}\n"
+
+    # output += f"\n\nThe query was: {arxiv_query}"
 
     return output
 
@@ -274,8 +284,7 @@ def run_model_inference(model, tokenizer, tokenized_query: str) -> str:
     """Runs model inference"""
     ids = torch.tensor(tokenized_query['input_ids']).to(model.device)
     masks = torch.tensor(tokenized_query['attention_mask']).to(model.device)
-    model_inputs = {"ids": ids, "masks": masks}
-    generated_ids = model.generate(**model_inputs, max_new_tokens=100, do_sample=False, pad_token_id=tokenizer.eos_token_id)
+    generated_ids = model.generate(input_ids=ids, attention_mask=masks, max_new_tokens=100, do_sample=False, pad_token_id=tokenizer.eos_token_id)
     generated_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
     return generated_texts
@@ -320,7 +329,7 @@ def run_arxiv_search_pipeline(user_query: str = None) -> str:
     ###############
 
     ############### parse the model output
-    query : Query = markdown_to_json(model_output)
+    query : Query = markdown_to_json(model_output[0])
     ###############
 
     ############### map to arxiv query format
@@ -331,7 +340,7 @@ def run_arxiv_search_pipeline(user_query: str = None) -> str:
     ###############
 
     ############### create a return message for the user
-    output = arxiv_to_chat(arxiv_response)
+    output = arxiv_to_chat(arxiv_response, arxiv_query)
     ###############
 
     return output

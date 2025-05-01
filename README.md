@@ -56,16 +56,17 @@ For best results, only enter your query in the chat window. Do not include any o
 - **Base model**: Meta Llama 3.2 1B Instruct
 - **Structured Output**: The model is trained to output structured markdown instead of conversational text. This makes it possible to parse the output and construct a query for a search API.
 - **Generate realistic training data**: Synthetically generated dataset designed to teach the model to output structured markdown. Added variance to the training data by passing generated user queries through an LLM to make the user queries more conversational and realistic.
-- **Dataset size**: 10,000 synthetically generated queries enough to achieve satisfactory performance.
+- **Dataset size**: 50,000 synthetically generated queries enough to achieve satisfactory performance.
 - **LoRA fine tuning**: Fine-tuning process uses LoRA (Low-Rank Adaptation) to efficiently adapt the base model for our specific structured output task while maintaining its general knowledge capabilities.
 
 
 ### Dataset Sample
 
-| User Query | Final JSON output (after parsing) |
+| Input query | Label |
 |------------|------------------------------|
-| "Find recent papers on transformer architectures in NLP published in the last 2 years with at least 100 citations" | ```{"keyword": "transformers", "year": (2023, ">="), "sort_by": "year", "limit": 10}``` | 
+| "Find recent papers on transformer architectures in NLP published since 2023 with at least 100 citations" | ```"## QUERY PARAMETERS\n\n- **Topic**: NLP\n\n## CONSTRAINTS\n\n- **Citations**: (>=, 100)\n- **Keyword**: transformers\n- **Year**: (>=, 2023)\n\n## OPTIONS\n\n- **Limit**: 10\n- **Sort By**: relevance\n- **Sort Order**: descending"``` | 
 
+During training, the input query is also augmented with a system prompt (not shown) to guide the model to output structured markdown.
 
 ## License
 
