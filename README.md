@@ -11,8 +11,8 @@ A lightweight tool that retrieves relevant research papers from Arxiv based on u
 
 ## Key Features
 
-- ✅ **Lightweight**: Fine-tuned Meta Llama 3.2 1B Instruct model, which can be loaded unquantized on a 16GB Macbook Air.
-- ✅ **Open Source**: Model available on 🤗. Simply use the model id "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query". Full model card available on [Hugging Face](https://huggingface.co/Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query).  Papers retrieved from open source Arxiv API.
+- ✅ **Lightweight**: Fine-tuned Meta Llama 3.2 3B Instruct model, which can be loaded unquantized on a 16GB Macbook Air.
+- ✅ **Open Source**: Model available on 🤗. Simply use the model id "Shaikh58/llama-3.2-3b-instruct-lora-arxiv-query". Full model card available on [Hugging Face](https://huggingface.co/Shaikh58/llama-3.2-3b-instruct-lora-arxiv-query).  Papers retrieved from open source Arxiv API.
 - ✅ **Cursor Integration**: Seamless workflow through MCP server integration. No need to leave the IDE or load the model yourself.
 - ✅ **Custom Search**: Supports various search constraints and filtering options such as citation count and publication date
 
@@ -43,7 +43,7 @@ If everything works, you should see the server in the list. You may need to refr
 
 ### Its ready to try out!
 
-#### Note: This tool loads in a fine tuned 1B parameter model from the Hugging Face hub. It is small enough to fit unquantized on a 16GB M3 Macbook Air, and may even work with as low as 8GB of GPU memory (unified memory if you're a Mac user). 
+#### Note: This tool loads in a fine tuned 3B parameter model from the Hugging Face hub. It is small enough to fit unquantized on a 16GB M3 Macbook Air. 
 
 Tools in Cursor only work in Agent mode. Switch to Agent mode in your chat window, and ask it to find you research papers! It should connect to this tool and ask 
 for your permission to run it. Wait a few seconds and it should return a list of papers.
@@ -53,7 +53,7 @@ For best results, only enter your query in the chat window. Do not include any o
 
 ## Deep dive: LLM Fine-tuning
 
-- **Base model**: Meta Llama 3.2 1B Instruct
+- **Base model**: Meta Llama 3.2 3B Instruct
 - **Structured Output**: The model is trained to output structured markdown instead of conversational text. This makes it possible to parse the output and construct a query for a search API.
 - **Generate realistic training data**: Synthetically generated dataset designed to teach the model to output structured markdown. Added variance to the training data by passing generated user queries through an LLM to make the user queries more conversational and realistic.
 - **Dataset size**: 50,000 synthetically generated queries enough to achieve satisfactory performance.

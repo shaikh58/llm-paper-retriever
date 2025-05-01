@@ -14,14 +14,14 @@ from requests import get
 mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "peft", "datasets", "pydantic", "torch", "typing", "json", "arxiv", "accelerate"])
 
 base_model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Llama-3.2-1B-Instruct",
+    "meta-llama/Llama-3.2-3B-Instruct",
     trust_remote_code=True,
     # device_map="auto"
 )
 
 model = PeftModel.from_pretrained(
     base_model,
-    "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query"
+    "Shaikh58/llama-3.2-3b-instruct-lora-arxiv-query"
 )
 
 tokenizer = AutoTokenizer.from_pretrained("Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query",trust_remote_code=True)
@@ -56,7 +56,7 @@ class Query(BaseModel):
     year: Optional[FilterCriteria] = None
     citations: Optional[FilterCriteria] = None
     keyword: Optional[str] = None
-    limit: Optional[int] = 10
+    limit: Optional[int] = 20
     # relevance not used for now
     sort_by: Optional[Literal["year", "citations", "relevance"]] = "citations"
     sort_order: Optional[Literal["ascending", "descending"]] = "descending"
@@ -68,29 +68,31 @@ def markdown_to_json(markdown_text: str) -> Query:
     params = {}
     # extract the "assistant" section of the model output
     assistant_section = markdown_text.split("<|assistant|>")[1]
-    
-    # Helper function to extract value from a line
-    def extract_value(line: str) -> str:
-        return line.split("**: ", 1)[1].strip()
-    
+    assistant_section = assistant_section.replace("*","")
     # Split the text into sections
     sections = assistant_section.split("##")
-    
     for section in sections:
         if not section.strip():
-            continue
-            
+            continue        
         lines = section.strip().split("\n")
         section_title = lines[0].strip().lower()
         
         # Process each bullet point in the section
         for line in lines[1:]:
-            if not line.strip() or not "**" in line:
+            # Skip empty lines or lines without the bullet point format
+            if not line.strip() or not line.strip().startswith("-"):
                 continue
                 
-            # Extract the parameter name and value
-            param_name = line.split("**")[1].lower()
-            value = extract_value(line)
+            # Remove the bullet point and any leading/trailing whitespace
+            line = line.strip()[1:].strip()
+            
+            # Split on the first colon to get parameter name and value
+            if ":" not in line:
+                continue
+                
+            param_name, value = line.split(":", 1)
+            param_name = param_name.strip().lower()
+            value = value.strip()
             
             if param_name == "topic":
                 params["topic"] = value
@@ -131,6 +133,8 @@ def to_arxiv_format(query: Query) -> str:
         # elif param_name == "citations":
         #     ...
         elif param_name == "topic":
+            arxiv_query += f"ti:%22{value}%22 AND "
+        elif param_name == "keyword":
             arxiv_query += f"ti:%22{value}%22 AND "
         elif param_name == "year":
             date_now = datetime.now().strftime("%Y%m%d%H%M")
@@ -195,6 +199,9 @@ def request_arxiv(arxiv_query: str, user_query: Query) -> str:
 
 def arxiv_to_chat(arxiv_response: list[arxiv.Result], arxiv_query: str) -> str:
     """Converts arxiv response to chat format"""
+    if arxiv_response == []:
+        output = "There were no results that matched your query and citation limit. If you specified a citation limit, try a lower number. If you did not specify a citation limit, try a different query."
+        return output
     output = "Here are the papers I found that match your query. If you specified a citation limit, the results are filtered and sorted by citations: \n\n "
 
     for result in arxiv_response:
