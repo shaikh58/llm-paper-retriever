@@ -18,7 +18,7 @@ load_dotenv()
 mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "peft", "datasets", "pydantic", "torch", "typing", "json", "arxiv", "accelerate"])
 
 base_model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Llama-3.2-3B-Instruct",
+    "meta-llama/Llama-3.2-1B-Instruct",
     trust_remote_code=True,
     token=os.getenv('HF_TOKEN'),
     # device_map="auto"
@@ -26,7 +26,7 @@ base_model = AutoModelForCausalLM.from_pretrained(
 
 model = PeftModel.from_pretrained(
     base_model,
-    "Shaikh58/llama-3.2-3b-instruct-lora-arxiv-query"
+    "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query"
 )
 
 tokenizer = AutoTokenizer.from_pretrained(
@@ -75,33 +75,30 @@ def markdown_to_json(markdown_text: str) -> Query:
     """Converts markdown from model output to json for arxiv query"""
     # Initialize an empty dictionary to store our parameters
     params = {}
-    # extract the "assistant" section of the model output
     assistant_section = markdown_text.split("<|assistant|>")[1]
-    assistant_section = assistant_section.replace("*","")
+    
+    # Helper function to extract value from a line
+    def extract_value(line: str) -> str:
+        return line.split("**: ", 1)[1].strip()
+    
     # Split the text into sections
     sections = assistant_section.split("##")
+    
     for section in sections:
         if not section.strip():
-            continue        
+            continue
+            
         lines = section.strip().split("\n")
         section_title = lines[0].strip().lower()
         
         # Process each bullet point in the section
         for line in lines[1:]:
-            # Skip empty lines or lines without the bullet point format
-            if not line.strip() or not line.strip().startswith("-"):
+            if not line.strip() or not "**" in line:
                 continue
                 
-            # Remove the bullet point and any leading/trailing whitespace
-            line = line.strip()[1:].strip()
-            
-            # Split on the first colon to get parameter name and value
-            if ":" not in line:
-                continue
-                
-            param_name, value = line.split(":", 1)
-            param_name = param_name.strip().lower()
-            value = value.strip()
+            # Extract the parameter name and value
+            param_name = line.split("**")[1].lower()
+            value = extract_value(line)
             
             if param_name == "topic":
                 params["topic"] = value
@@ -123,6 +120,7 @@ def markdown_to_json(markdown_text: str) -> Query:
                 params["sort_order"] = value.lower()
     
     return Query(**params)
+
 
 def to_arxiv_format(query: Query) -> str:
     """Converts json query to arxiv query format"""
