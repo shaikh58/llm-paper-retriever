@@ -10,12 +10,17 @@ from pydantic import BaseModel
 import arxiv
 from datetime import datetime
 from requests import get
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 mcp = FastMCP("arxiv-mcp-server", dependencies=["transformers", "peft", "datasets", "pydantic", "torch", "typing", "json", "arxiv", "accelerate"])
 
 base_model = AutoModelForCausalLM.from_pretrained(
     "meta-llama/Llama-3.2-3B-Instruct",
     trust_remote_code=True,
+    token=os.getenv('HF_TOKEN'),
     # device_map="auto"
 )
 
@@ -24,7 +29,11 @@ model = PeftModel.from_pretrained(
     "Shaikh58/llama-3.2-3b-instruct-lora-arxiv-query"
 )
 
-tokenizer = AutoTokenizer.from_pretrained("Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query",trust_remote_code=True)
+tokenizer = AutoTokenizer.from_pretrained(
+    "meta-llama/Llama-3.2-3B-Instruct", 
+    token=os.getenv('HF_TOKEN'),
+    trust_remote_code=True
+)
 tokenizer.pad_token = tokenizer.eos_token
 
 # Define the valid operators as string literals
@@ -270,7 +279,7 @@ def tokenize_and_truncate(examples, max_context_window, max_seq_len):
 
 def preprocess_query(query: str) -> str:
     max_seq_len = 350 
-    max_context_window = 8000 # llama3.2-1b-instruct official context window
+    max_context_window = 8000 # llama3.2-3b-instruct official context window
     eval_ds = Dataset.from_dict(query)
     eval_text = eval_ds.map(
     create_inference_text,
