@@ -4,8 +4,7 @@ A lightweight tool that retrieves relevant research papers from Arxiv based on u
 
 
 <video width="70%" controls>
-  <source src="demo_video.mp4" type="video/mp4">
-  Your browser does not support the video tag.
+  <source src="misc/demo-video.mp4" type="video/mp4">
 </video>
 
 
