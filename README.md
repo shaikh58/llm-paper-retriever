@@ -2,16 +2,12 @@
 
 A lightweight tool that retrieves relevant research papers from Arxiv based on user queries, leveraging a fine-tuned open-source LLM and Cursor IDE integration via MCP.
 
-
-<video width="70%" controls>
-  <source src="misc/demo-video.mp4" type="video/mp4">
-</video>
-
+![Demo](misc/demo-video.gif)
 
 ## Key Features
 
-- ✅ **Lightweight**: Fine-tuned Meta Llama 3.2 1B Instruct model, which can be loaded unquantized on a 16GB Macbook Air.
-- ✅ **Open Source**: Model available on 🤗. Simply use the model id "Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query". Full model card available on [Hugging Face](https://huggingface.co/Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query).  Papers retrieved from open source Arxiv API.
+- ✅ **Lightweight**: Powered by a custom fine-tuned Meta Llama 3.2 1B Instruct model, which can be loaded unquantized on a 16GB Macbook Air.
+- ✅ **Open Source**: Model available on 🤗 - model id [Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query](https://huggingface.co/Shaikh58/llama-3.2-1b-instruct-lora-arxiv-query).  Papers are retrieved from open source Arxiv API, citation counts from OpenCitations. Avoids the need for paid proprietary model APIs.
 - ✅ **Cursor Integration**: Seamless workflow through MCP server integration. No need to leave the IDE or load the model yourself.
 - ✅ **Custom Search**: Supports various search constraints and filtering options such as citation count and publication date
 
